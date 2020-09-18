@@ -1,0 +1,6 @@
+List<Projects> projectList=new ArrayList<Projects>();
+		for(SearchProjects prj : projects) {
+			Projects prjObj = new Projects();
+			prjObj.setProjectKey(prj.getProject_key());
+			projectList.add(prjObj);
+		}
