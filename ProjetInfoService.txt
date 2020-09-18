@@ -1,0 +1,173 @@
+private List<Issue> callJiraWebClient(String projectKey) throws IOException, URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+
+		int total = 0;
+		int maxRes = 1;
+		int apiCall = 0;
+		int startWith = 0;
+
+		List<Issue> issues = new ArrayList<Issue>();
+
+		total=callJiraWebClientForPaginationCounts(projectKey,startWith,maxRes);
+		apiCall=(int) Math.ceil(total/maxRes);
+
+		for(int i = 1 ; i <= apiCall ; i++) {
+			issues.addAll(callJiraWebClientWithPagination(projectKey,startWith,maxRes,total));
+			startWith = startWith + maxRes;
+		}
+
+		return issues;
+	}
+
+	private List<Issue> callJiraWebClientWithPagination(String projectKey, int startAt,int maxResults, int total) throws IOException, URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+		JiraRestClient jiraRestClient = jiraWebClient.getJiraRestClient();
+		ProjectRestClient projectRestClient = jiraRestClient.getProjectClient();
+		SearchRestClient searchRestClient = jiraRestClient.getSearchClient();
+
+		System.out.println("ProjectInfoService.getProjectDetails Project Key: " + projectKey);
+		URI uriBase = new URI(releaseUrl + "/" + projectKey);
+
+		projectKey = projectKey.toUpperCase();
+		// Get issues from jira
+		SearchResult issueSearch =
+				searchRestClient
+						.searchJql(
+								"project = " + projectKey + " order by created DESC",maxResults,startAt,null)
+						.claim();
+		jiraRestClient.close();
+		total = issueSearch.getTotal();
+		return (List<Issue>) issueSearch.getIssues();
+	}
+	
+	private int callJiraWebClientForPaginationCounts(String projectKey, int startAt,int maxResults) throws IOException, URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+		JiraRestClient jiraRestClient = jiraWebClient.getJiraRestClient();
+		ProjectRestClient projectRestClient = jiraRestClient.getProjectClient();
+		SearchRestClient searchRestClient = jiraRestClient.getSearchClient();
+
+		System.out.println("ProjectInfoService.getProjectDetails Project Key: " + projectKey);
+		URI uriBase = new URI(releaseUrl + "/" + projectKey);
+
+		projectKey = projectKey.toUpperCase();
+		// Get issues from jira
+		SearchResult issueSearch =
+				searchRestClient
+						.searchJql(
+								"project = " + projectKey + " order by created DESC",1,startAt,null)
+						.claim();
+		jiraRestClient.close();
+		int total = issueSearch.getTotal();
+		return total;
+	}
+
+	private Project createProjectStructure(String projectType) {
+		Project prj = new Project();
+		prj.setProject_label(projectType);
+		List<Labels> labelList= new ArrayList<Labels>();
+		Labels analysisDesign = new Labels();
+		analysisDesign.setName(LabelConstants.ANALYSIS_DESIGN);
+		analysisDesign.setPriority(createPriorityList());
+		analysisDesign.setStatus(null);
+		analysisDesign.setSubLabel(null);
+		labelList.add(analysisDesign);
+		Labels buildAndDevelopment = new Labels();
+		buildAndDevelopment.setName(LabelConstants.BUILD_DEVELOPMENT);
+		buildAndDevelopment.setPriority(createPriorityList());
+		buildAndDevelopment.setStatus(null);
+		buildAndDevelopment.setSubLabel(null);
+		labelList.add(buildAndDevelopment);
+		Labels functionalBusinessTesting = new Labels();
+		functionalBusinessTesting.setName(LabelConstants.FUNCTIONAL_BUSS_TESTING);
+		functionalBusinessTesting.setPriority(createPriorityList());
+		functionalBusinessTesting.setStatus(null);
+		functionalBusinessTesting.setSubLabel(null);
+		labelList.add(functionalBusinessTesting);
+		prj.getLabels().addAll(labelList);
+
+		return prj;
+	}
+
+	/**
+	 * Fetch details of project by key and type.
+	 *
+	 * @param projectKey  Key of the project whose details are required.
+	 * @param projectType Type of the projects whose details are required (Agile/Waterfall).
+	 * @return Map<String, Project>
+	 * @throws URISyntaxException
+	 * @throws ExecutionException
+	 * @throws InterruptedException
+	 * @throws IOException
+	 * @throws UnirestException 
+	 */
+	public Map<String, Project> getProjectDetails(String projectKey, String projectType)
+			throws IOException, URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+
+		JiraRestClient jiraRestClient = jiraWebClient.getJiraRestClient();
+		ProjectRestClient projectRestClient = jiraRestClient.getProjectClient();
+		SearchRestClient searchRestClient = jiraRestClient.getSearchClient();
+
+    	System.out.println("ProjectInfoService.getProjectDetails Project Key: " + projectKey);
+		URI uriBase = new URI(releaseUrl + "/" + projectKey);
+
+		countResponse = new HashMap<>();
+
+		List<Issue> jIssues = callJiraWebClient(projectKey);
+
+		// Parse jira response and fill it into custom response
+		Project prj = createProjectStructure(projectType);
+
+		for(String status : LabelConstants.ALL_STATUS_LIST) {
+			List<Issue> issues =new ArrayList<Issue>();
+			jIssues.forEach(issue -> {
+				String statusName = !StringUtils.isEmpty(issue.getStatus()) ? issue.getStatus().getName() : "";
+				if(statusName.equalsIgnoreCase(status)) {
+					issues.add(issue);
+				}
+			});
+			jiraApiUtil.updateNewCount(false, prj, issues,status);
+		}
+		prj.getLabels().addAll(jiraApiUtil.createLabelsList());
+		isIssuePresent = false;
+		jIssues.forEach(issue -> {
+			//System.out.println(issue.toString());
+			isIssuePresent = true;
+			Set<String> labelNameList = issue.getLabels();
+			String projectName = !StringUtils.isEmpty(issue.getProject()) ? issue.getProject().getName() : "";
+			String priorityName = !StringUtils.isEmpty(issue.getPriority()) ? issue.getPriority().getName() : "";
+			String statusName = !StringUtils.isEmpty(issue.getStatus()) ? issue.getStatus().getName() : "";
+			prj.setName(projectName);
+			prj.getLabels().forEach(label -> {
+				if (label.getName().equalsIgnoreCase("Production_Ready")) {
+					label.getSubLabel().forEach(subLabel -> {
+						if (subLabel.getName().equalsIgnoreCase("Production_Release_Completed")) {
+							subLabel.setCount((long)1);
+						}
+					});
+				}
+			});
+			jiraApiUtil.updateCount(false, prj, labelNameList, priorityName, statusName);
+		});
+		jiraRestClient.close();
+
+		// if no issues are returned from jira
+		if (!isIssuePresent) {
+			JiraRestClient jiraRestClient1 = jiraWebClient.getJiraRestClient();
+			ProjectRestClient projectRestClient1 = jiraRestClient1.getProjectClient();
+			BasicProject project = projectRestClient1.getProject(projectKey).claim();
+			String projectName = project.getName();
+			prj.setName(projectName);
+			prj.getLabels().addAll(jiraApiUtil.createLabelsList());
+			prj.getLabels().forEach(label -> {
+				if (label.getName().equalsIgnoreCase("Production_Ready")) {
+					label.getSubLabel().forEach(subLabel -> {
+						if (subLabel.getName().equalsIgnoreCase("Production_Release_Completed")) {
+							subLabel.setCount(setProdCount(uriBase));
+						}
+					});
+				}
+			});
+			jiraRestClient1.close();
+		}
+		
+		jiraApiUtil.setProjectSummary(prj, (List<Issue>) jIssues, projectKey);
+		countResponse.put("project", prj);
+		return countResponse;
+	}
