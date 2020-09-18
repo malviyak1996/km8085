@@ -1,0 +1,52 @@
+AllIssueInfoService.java
+
+@Autowired
+H2DataServiceImpl h2DataServiceImpl;
+
+public Map<String, Project> getAllIssuesCountLabelWise() throws URISyntaxException, IOException, ExecutionException, InterruptedException, UnirestException {
+		countResponse = new HashMap<>();
+		List<Projects> allProjects= h2DataServiceImpl.getProjects();
+	    String projectQuery = jiraApiUtil.createProjectKeysQuery();
+
+	    // Get response from jira
+		SearchResult issueSearch =
+		        jiraWebClient
+		            .getJiraRestClient()
+		            .getSearchClient() //labels = "+projectType+ " AND
+		            .searchJql(projectQuery + " order by created DESC")
+		            .claim();
+	  
+		// Get release response from jira
+		SearchResult releasedIssue =
+              jiraWebClient
+                      .getJiraRestClient()
+                      .getSearchClient() //labels = "+projectType+ " AND
+                      .searchJql(projectQuery + " AND " + " fixVersion in releasedVersions()" + " order by created DESC")
+                      .claim();
+		    			    	
+    	// Parse jira response and fill it into custom response
+    	Project prj = new Project();
+    	//prj.setProject_label(projectType);
+		prj.setName("All"); 
+		prj.getLabels().addAll(jiraApiUtil.createAllLabelsList());
+		issueSearch.getIssues().forEach(issue ->{
+			Set<String> labelNameList = issue.getLabels();
+			String priorityName = !StringUtils.isEmpty(issue.getPriority()) ? issue.getPriority().getName() : "";
+			String statusName = !StringUtils.isEmpty(issue.getStatus()) ? issue.getStatus().getName() : "";
+			jiraApiUtil.updateCount(false,prj,labelNameList,priorityName,statusName);
+		});
+		prj.getLabels().forEach(label -> {
+			if (label.getName().equalsIgnoreCase( "Production_Ready")) {
+				label.getSubLabel().forEach(subLabel -> {
+					if (subLabel.getName().equalsIgnoreCase("Production_Release_Completed")) {
+						subLabel.setCount(Long.valueOf(releasedIssue.getTotal()));
+					}
+				});
+			}
+		});
+		
+		jiraApiUtil.getAllProjectSummary(prj,(List<Issue>) issueSearch.getIssues(),allProjects);
+		countResponse.put("project", prj);
+		
+		return countResponse;
+	}

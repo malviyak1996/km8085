@@ -1,0 +1,121 @@
+//    @Async("taskExecutor")
+     int collectAllOpenDefcts() throws URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+
+        List <CompletableFuture<HttpResponse<JsonNode>>>
+                allFutures = new ArrayList<>();
+
+        total_count=0;
+
+        List<Projects> allPrjs =h2DataService.getProjects();
+        for(Projects prj:allPrjs) {
+      	  String uriBase = bugUrl+prj.getProjectKey()+
+                    "+and+issuetype+in+(Bug,Defect)+and+status+not+in+(closed,Done,Approved)";
+            allFutures.add(getDefectsService(uriBase));
+        }
+        CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
+
+        allFutures.stream()
+                .forEach( p -> {
+                    try {
+                        total_count+= Integer.parseInt(p.get().getBody()
+                                .getObject().get("total").toString());
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } catch (ExecutionException e) {
+                        e.printStackTrace();
+                    }
+
+                });
+
+
+        return total_count;
+    }
+     
+     int collectAllClosedDefcts() throws URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+
+         List <CompletableFuture<HttpResponse<JsonNode>>>
+                 allFutures = new ArrayList<>();
+
+         total_count=0;
+
+         List<Projects> allPrjs =h2DataService.getProjects();
+         for(Projects prj:allPrjs) {
+       	  String uriBase = bugUrl+prj.getProjectKey()+
+       			  "+and+issuetype+in+(Bug,Defect)+and+status+in+(Closed,Done,Approved)";
+             allFutures.add(getDefectsService(uriBase));
+         }
+
+         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
+
+         allFutures.stream()
+                 .forEach( p -> {
+                     try {
+                         total_count+= Integer.parseInt(p.get().getBody()
+                                 .getObject().get("total").toString());
+                     } catch (InterruptedException e) {
+                         e.printStackTrace();
+                     } catch (ExecutionException e) {
+                         e.printStackTrace();
+                     }
+
+                 });
+
+
+         return total_count;
+     }
+     
+     public int collectOpenProjectDefcts(String ProjectKey) throws URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+
+         List <CompletableFuture<HttpResponse<JsonNode>>>
+                 allFutures = new ArrayList<>();
+
+          total_count=0;
+             String uriBase = bugUrl+ProjectKey+
+                     "+and+issuetype+in+(Bug,Defect)+and+status+not+in+(Closed,Done,Approved)";
+             allFutures.add(getDefectsService(uriBase));
+         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
+
+         allFutures.stream()
+                 .forEach( p -> {
+                     try {
+                         total_count+= Integer.parseInt(p.get().getBody()
+                                 .getObject().get("total").toString());
+                     } catch (InterruptedException e) {
+                         e.printStackTrace();
+                     } catch (ExecutionException e) {
+                         e.printStackTrace();
+                     }
+
+                 });
+
+
+         return total_count;
+     }
+     
+     public int collectClosedProjectDefcts(String ProjectKey) throws URISyntaxException, ExecutionException, InterruptedException, UnirestException {
+
+         List <CompletableFuture<HttpResponse<JsonNode>>>
+                 allFutures = new ArrayList<>();
+
+          total_count=0;
+             String uriBase = bugUrl+ProjectKey+
+                     "+and+issuetype+in+(Bug,Defect)+and+status+in+(Closed,Done,Approved)";
+             allFutures.add(getDefectsService(uriBase));
+         CompletableFuture.allOf(allFutures.toArray(new CompletableFuture[0])).join();
+
+         allFutures.stream()
+                 .forEach( p -> {
+                     try {
+                         total_count+= Integer.parseInt(p.get().getBody()
+                                 .getObject().get("total").toString());
+                     } catch (InterruptedException e) {
+                         e.printStackTrace();
+                     } catch (ExecutionException e) {
+                         e.printStackTrace();
+                     }
+
+                 });
+
+
+         return total_count;
+     }
